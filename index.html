@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام كاشير وتقارير متكامل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .modal, .view { transition: opacity 0.25s ease; }
+        .hidden-view { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="flex items-center justify-between p-4 bg-white shadow-md">
+        <h1 class="text-2xl font-bold text-gray-800">نظام الهايبر ماركت</h1>
+        <nav>
+            <button id="posViewBtn" class="px-4 py-2 text-white bg-blue-600 rounded-lg">شاشة البيع</button>
+            <button id="reportsViewBtn" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg">التقارير</button>
+        </nav>
+    </div>
+
+    <!-- POS View -->
+    <div id="posView" class="view flex h-[calc(100vh-80px)] overflow-hidden">
+        <!-- Main Content: Products and Search -->
+        <main class="w-3/5 p-4 overflow-y-auto">
+            <header class="flex justify-between items-center mb-4">
+                <h2 class="text-3xl font-bold text-gray-800">نقاط البيع</h2>
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <button id="addProductBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition-colors">إضافة منتج جديد</button>
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="ابحث بالاسم أو الباركود..." class="w-64 p-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg class="w-5 h-5 text-gray-400 absolute top-1/2 right-2 transform -translate-y-1/2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                </div>
+            </header>
+            <div id="loading-products" class="text-center p-10"><p class="text-gray-600">جاري تحميل المنتجات...</p></div>
+            <div id="productsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></div>
+        </main>
+
+        <!-- Sidebar: Cart and Checkout -->
+        <aside class="w-2/5 bg-white border-r border-gray-200 flex flex-col">
+            <div class="p-4 border-b"><h2 class="text-2xl font-bold text-gray-800">سلة المشتريات</h2></div>
+            <div id="cartItems" class="flex-grow p-4 overflow-y-auto">
+                 <div id="empty-cart-message" class="flex flex-col items-center justify-center h-full text-gray-400">
+                    <svg class="w-16 h-16 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    <p>السلة فارغة</p>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t">
+                <div class="space-y-2">
+                    <div class="flex justify-between text-lg"><span>المجموع الفرعي</span><span id="subtotal">0.00 جنيه</span></div>
+                    <div class="flex justify-between text-lg"><span>الضريبة (14%)</span><span id="tax">0.00 جنيه</span></div>
+                    <div class="flex justify-between text-2xl font-bold text-blue-600"><span>الإجمالي</span><span id="total">0.00 جنيه</span></div>
+                </div>
+                <button id="checkoutBtn" class="w-full mt-4 bg-green-600 text-white py-3 rounded-lg text-xl font-bold shadow-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">الدفع</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Reports View -->
+    <div id="reportsView" class="view hidden-view p-6 h-[calc(100vh-80px)] overflow-y-auto">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6">لوحة التحكم والتقارير</h2>
+        
+        <!-- Filters -->
+        <div class="bg-white p-4 rounded-lg shadow mb-6 flex items-center space-x-4 space-x-reverse">
+            <h3 class="text-lg font-semibold">عرض تقارير:</h3>
+            <select id="yearFilter" class="p-2 border border-gray-300 rounded-lg"></select>
+            <select id="monthFilter" class="p-2 border border-gray-300 rounded-lg"></select>
+            <select id="dayFilter" class="p-2 border border-gray-300 rounded-lg"></select>
+            <button id="fetchReportsBtn" class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700">عرض التقرير</button>
+        </div>
+
+        <!-- Summary -->
+        <div id="reports-loading" class="text-center p-10 hidden"><p class="text-gray-600">جاري تحميل التقارير...</p></div>
+        <div id="reports-content" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow text-center">
+                    <h4 class="text-gray-500 text-lg">إجمالي الإيرادات</h4>
+                    <p id="totalRevenue" class="text-3xl font-bold text-green-600">0.00 جنيه</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow text-center">
+                    <h4 class="text-gray-500 text-lg">عدد عمليات البيع</h4>
+                    <p id="totalSalesCount" class="text-3xl font-bold text-blue-600">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow text-center">
+                    <h4 class="text-gray-500 text-lg">إجمالي المنتجات المباعة</h4>
+                    <p id="totalItemsSold" class="text-3xl font-bold text-yellow-600">0</p>
+                </div>
+            </div>
+
+            <!-- Details -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-xl font-bold mb-4">المنتجات الأكثر مبيعًا</h3>
+                    <div id="topSellingProducts" class="space-y-3"></div>
+                </div>
+                <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-xl font-bold mb-4">سجل المبيعات للفترة المحددة</h3>
+                    <div id="salesLog" class="h-96 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+        <div id="no-reports-data" class="text-center p-10 hidden"><p class="text-gray-500">لا توجد بيانات مبيعات للفترة المحددة.</p></div>
+    </div>
+
+    <!-- Modals (Add Product, Receipt, Alert) -->
+    <div id="addProductModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6">إضافة منتج جديد</h2>
+            <form id="addProductForm">
+                <div class="mb-4"><label for="productName" class="block text-gray-700 mb-2">اسم المنتج</label><input type="text" id="productName" class="w-full p-2 border border-gray-300 rounded-lg" required></div>
+                <div class="mb-4"><label for="productPrice" class="block text-gray-700 mb-2">السعر (جنيه)</label><input type="number" id="productPrice" class="w-full p-2 border border-gray-300 rounded-lg" min="0.01" step="0.01" required></div>
+                <div class="mb-4"><label for="productStock" class="block text-gray-700 mb-2">الكمية بالمخزون</label><input type="number" id="productStock" class="w-full p-2 border border-gray-300 rounded-lg" min="0" required></div>
+                <div class="mb-4"><label for="productBarcode" class="block text-gray-700 mb-2">الباركود (اختياري)</label><input type="text" id="productBarcode" class="w-full p-2 border border-gray-300 rounded-lg"></div>
+                <div class="flex justify-end space-x-4 space-x-reverse"><button type="button" id="cancelAddProduct" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600">إلغاء</button><button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">إضافة المنتج</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="receiptModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-2xl w-full max-w-sm"><div id="receiptContent" class="text-right"><h2 class="text-center text-2xl font-bold mb-4">إيصال الدفع</h2><p class="text-center text-sm text-gray-500">هايبر ماركت</p><p class="text-center text-sm text-gray-500 mb-4" id="receiptDate"></p><hr class="my-2 border-dashed"><div id="receiptItems" class="space-y-1"></div><hr class="my-2 border-dashed"><div class="space-y-1 text-sm"><div class="flex justify-between"><span>المجموع الفرعي:</span> <span id="receiptSubtotal"></span></div><div class="flex justify-between"><span>الضريبة (14%):</span> <span id="receiptTax"></span></div><div class="flex justify-between font-bold text-base"><span>الإجمالي:</span> <span id="receiptTotal"></span></div></div><hr class="my-2 border-dashed"><p class="text-center text-sm mt-4">شكراً لتسوقكم!</p></div><div class="flex justify-around mt-6"><button id="printReceiptBtn" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">طباعة</button><button id="closeReceiptBtn" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">إغلاق</button></div></div>
+    </div>
+    <div id="alertModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm text-center"><p id="alertMessage" class="text-lg mb-6"></p><button id="closeAlertBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">حسنًا</button></div>
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, writeBatch, query, where, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        
+        // --- Initialize Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- DOM Elements ---
+        const posView = document.getElementById('posView');
+        const reportsView = document.getElementById('reportsView');
+        const posViewBtn = document.getElementById('posViewBtn');
+        const reportsViewBtn = document.getElementById('reportsViewBtn');
+        const productsGrid = document.getElementById('productsGrid');
+        const cartItemsContainer = document.getElementById('cartItems');
+        const checkoutBtn = document.getElementById('checkoutBtn');
+        const searchInput = document.getElementById('searchInput');
+        const emptyCartMessage = document.getElementById('empty-cart-message');
+        const subtotalEl = document.getElementById('subtotal');
+        const taxEl = document.getElementById('tax');
+        const totalEl = document.getElementById('total');
+        const loadingProducts = document.getElementById('loading-products');
+        const yearFilter = document.getElementById('yearFilter');
+        const monthFilter = document.getElementById('monthFilter');
+        const dayFilter = document.getElementById('dayFilter');
+        const fetchReportsBtn = document.getElementById('fetchReportsBtn');
+        const reportsLoading = document.getElementById('reports-loading');
+        const reportsContent = document.getElementById('reports-content');
+        const noReportsData = document.getElementById('no-reports-data');
+        const totalRevenueEl = document.getElementById('totalRevenue');
+        const totalSalesCountEl = document.getElementById('totalSalesCount');
+        const totalItemsSoldEl = document.getElementById('totalItemsSold');
+        const topSellingProductsEl = document.getElementById('topSellingProducts');
+        const salesLogEl = document.getElementById('salesLog');
+        const addProductModal = document.getElementById('addProductModal');
+        const addProductBtn = document.getElementById('addProductBtn');
+        const cancelAddProductBtn = document.getElementById('cancelAddProduct');
+        const addProductForm = document.getElementById('addProductForm');
+        const receiptModal = document.getElementById('receiptModal');
+        const alertModal = document.getElementById('alertModal');
+        const alertMessage = document.getElementById('alertMessage');
+        const closeAlertBtn = document.getElementById('closeAlertBtn');
+
+        // --- App State ---
+        let products = [];
+        let cart = {};
+        let activeView = 'pos';
+        let productsCollectionRef;
+        let salesCollectionRef;
+
+        // --- Local Storage Persistence ---
+        const CART_STORAGE_KEY = 'hypermarketCart';
+        const VIEW_STORAGE_KEY = 'hypermarketActiveView';
+
+        function saveStateToLocalStorage() {
+            try {
+                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+                localStorage.setItem(VIEW_STORAGE_KEY, activeView);
+            } catch (e) {
+                console.error("Failed to save state to localStorage", e);
+            }
+        }
+
+        function loadStateFromLocalStorage() {
+            try {
+                const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+                const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+                if (savedCart) {
+                    cart = JSON.parse(savedCart);
+                }
+                if (savedView) {
+                    activeView = savedView;
+                }
+            } catch (e) {
+                console.error("Failed to load state from localStorage", e);
+                cart = {}; // Reset on error
+                activeView = 'pos';
+            }
+        }
+
+        // --- App Initialization ---
+        function switchView(viewToShow) {
+            activeView = viewToShow;
+            posView.classList.add('hidden-view');
+            reportsView.classList.add('hidden-view');
+            
+            posViewBtn.classList.replace('bg-blue-600', 'bg-gray-200');
+            posViewBtn.classList.replace('text-white', 'text-gray-700');
+            reportsViewBtn.classList.replace('bg-blue-600', 'bg-gray-200');
+            reportsViewBtn.classList.replace('text-white', 'text-gray-700');
+
+            if (viewToShow === 'pos') {
+                posView.classList.remove('hidden-view');
+                posViewBtn.classList.replace('bg-gray-200', 'bg-blue-600');
+                posViewBtn.classList.replace('text-gray-700', 'text-white');
+            } else {
+                reportsView.classList.remove('hidden-view');
+                reportsViewBtn.classList.replace('bg-gray-200', 'bg-blue-600');
+                reportsViewBtn.classList.replace('text-gray-700', 'text-white');
+                initializeDateFilters();
+            }
+            saveStateToLocalStorage(); // Save view change
+        }
+
+        // --- Custom Alert ---
+        function showAlert(message) {
+            alertMessage.textContent = message;
+            alertModal.classList.remove('hidden');
+        }
+        closeAlertBtn.addEventListener('click', () => alertModal.classList.add('hidden'));
+
+        // --- Authentication ---
+        async function initializeAuth() {
+            try {
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) await signInWithCustomToken(auth, token);
+                else await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                showAlert("فشل المصادقة. لا يمكن تحميل البيانات.");
+            }
+        }
+
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                console.log("User is signed in:", user.uid);
+                productsCollectionRef = collection(db, `artifacts/${appId}/public/data/products`);
+                salesCollectionRef = collection(db, `artifacts/${appId}/public/data/sales`);
+                loadProducts();
+            } else {
+                console.log("User is signed out.");
+            }
+        });
+        
+        // --- POS Functions (Products, Cart, Checkout) ---
+        function loadProducts() {
+            if (!productsCollectionRef) return;
+            onSnapshot(query(productsCollectionRef), (snapshot) => {
+                loadingProducts.style.display = 'none';
+                products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderProducts(products);
+            }, (error) => console.error("Error fetching products: ", error));
+        }
+
+        function renderProducts(productsToRender) {
+            productsGrid.innerHTML = '';
+            if (productsToRender.length === 0) {
+                productsGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">لم يتم العثور على منتجات.</p>`;
+                return;
+            }
+            productsToRender.forEach(product => {
+                const isOutOfStock = product.stock <= 0;
+                const card = `
+                    <div class="bg-white rounded-lg shadow p-4 flex flex-col justify-between ${isOutOfStock ? 'opacity-50' : ''}">
+                        <div>
+                            <h3 class="font-bold text-lg truncate">${product.name}</h3>
+                            <p class="text-gray-600">${product.price.toFixed(2)} جنيه</p>
+                            <p class="text-sm ${product.stock < 10 && product.stock > 0 ? 'text-red-500 font-semibold' : 'text-gray-500'}">
+                                ${isOutOfStock ? 'نفدت الكمية' : `المخزون: ${product.stock}`}
+                            </p>
+                        </div>
+                        <button data-product-id="${product.id}" class="add-to-cart-btn mt-3 w-full ${isOutOfStock ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'} text-white px-3 py-1.5 rounded-md transition-colors" ${isOutOfStock ? 'disabled' : ''}>إضافة للسلة</button>
+                    </div>`;
+                productsGrid.innerHTML += card;
+            });
+        }
+
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            const cartQuantity = cart[productId] ? cart[productId].quantity : 0;
+            if (cartQuantity >= product.stock) {
+                showAlert('الكمية في السلة تساوي المخزون المتاح.');
+                return;
+            }
+            if (cart[productId]) cart[productId].quantity++;
+            else cart[productId] = { name: product.name, price: product.price, quantity: 1, stock: product.stock };
+            updateCartDisplay();
+        }
+
+        function updateCartDisplay() {
+            cartItemsContainer.innerHTML = '';
+            let subtotal = 0;
+            const productIds = Object.keys(cart);
+            emptyCartMessage.classList.toggle('hidden', productIds.length > 0);
+            checkoutBtn.disabled = productIds.length === 0;
+
+            productIds.forEach(id => {
+                const item = cart[id];
+                subtotal += item.price * item.quantity;
+                cartItemsContainer.innerHTML += `
+                    <div class="flex justify-between items-center p-2 rounded-lg hover:bg-gray-100">
+                        <div><p class="font-semibold">${item.name}</p><p class="text-sm text-gray-500">${item.price.toFixed(2)} جنيه</p></div>
+                        <div class="flex items-center space-x-3 space-x-reverse">
+                            <button data-id="${id}" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">-</button>
+                            <span>${item.quantity}</span>
+                            <button data-id="${id}" data-action="increase" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">+</button>
+                        </div>
+                        <span class="font-semibold w-20 text-left">${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>`;
+            });
+            const tax = subtotal * 0.14;
+            const total = subtotal + tax;
+            subtotalEl.textContent = `${subtotal.toFixed(2)} جنيه`;
+            taxEl.textContent = `${tax.toFixed(2)} جنيه`;
+            totalEl.textContent = `${total.toFixed(2)} جنيه`;
+            saveStateToLocalStorage(); // Save cart changes
+        }
+        
+        function changeQuantity(productId, action) {
+            if (!cart[productId]) return;
+            if (action === 'increase') {
+                 const product = products.find(p => p.id === productId);
+                 if (cart[productId].quantity < product.stock) cart[productId].quantity++;
+                 else showAlert('الكمية في السلة تساوي المخزون المتاح.');
+            } else {
+                cart[productId].quantity--;
+                if (cart[productId].quantity === 0) delete cart[productId];
+            }
+            updateCartDisplay();
+        }
+
+        async function handleCheckout() {
+            if (Object.keys(cart).length === 0) return;
+            checkoutBtn.disabled = true;
+            checkoutBtn.textContent = 'جاري المعالجة...';
+            try {
+                const batch = writeBatch(db);
+                let subtotal = 0;
+                const saleItems = [];
+                for (const productId in cart) {
+                    const item = cart[productId];
+                    const productRef = doc(productsCollectionRef, productId);
+                    const newStock = item.stock - item.quantity;
+                    if (newStock < 0) throw new Error(`الكمية غير كافية للمنتج: ${item.name}`);
+                    batch.update(productRef, { stock: newStock });
+                    subtotal += item.price * item.quantity;
+                    saleItems.push({ productId, name: item.name, price: item.price, quantity: item.quantity });
+                }
+                const saleDoc = {
+                    timestamp: new Date(),
+                    items: saleItems,
+                    subtotal: subtotal,
+                    tax: subtotal * 0.14,
+                    total: subtotal * 1.14,
+                };
+                batch.set(doc(salesCollectionRef), saleDoc);
+                await batch.commit();
+                showReceipt(saleDoc);
+                cart = {};
+                updateCartDisplay();
+            } catch (error) {
+                console.error("Checkout failed:", error);
+                showAlert(`فشلت عملية الدفع: ${error.message}`);
+            } finally {
+                checkoutBtn.disabled = false;
+                checkoutBtn.textContent = 'الدفع';
+            }
+        }
+        
+        function showReceipt(saleData) {
+            document.getElementById('receiptDate').textContent = saleData.timestamp.toLocaleString('ar-EG');
+            document.getElementById('receiptItems').innerHTML = saleData.items.map(item => `<div class="flex justify-between text-sm"><span>${item.name} (×${item.quantity})</span><span>${(item.price * item.quantity).toFixed(2)}</span></div>`).join('');
+            document.getElementById('receiptSubtotal').textContent = `${saleData.subtotal.toFixed(2)} جنيه`;
+            document.getElementById('receiptTax').textContent = `${saleData.tax.toFixed(2)} جنيه`;
+            document.getElementById('receiptTotal').textContent = `${saleData.total.toFixed(2)} جنيه`;
+            receiptModal.classList.remove('hidden');
+        }
+
+        // --- Reports Functions ---
+        function initializeDateFilters() {
+            const currentYear = new Date().getFullYear();
+            yearFilter.innerHTML = `<option value="all">كل السنوات</option>`;
+            for (let y = currentYear; y >= 2020; y--) {
+                yearFilter.innerHTML += `<option value="${y}">${y}</option>`;
+            }
+            monthFilter.innerHTML = `<option value="all">كل الشهور</option>`;
+            const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+            months.forEach((m, i) => {
+                monthFilter.innerHTML += `<option value="${i}">${m}</option>`;
+            });
+            dayFilter.innerHTML = `<option value="all">كل الأيام</option>`;
+            dayFilter.disabled = true;
+        }
+
+        monthFilter.addEventListener('change', () => {
+            const year = parseInt(yearFilter.value);
+            const month = parseInt(monthFilter.value);
+            dayFilter.innerHTML = `<option value="all">كل الأيام</option>`;
+            if (!isNaN(year) && !isNaN(month)) {
+                dayFilter.disabled = false;
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                for (let d = 1; d <= daysInMonth; d++) {
+                    dayFilter.innerHTML += `<option value="${d}">${d}</option>`;
+                }
+            } else {
+                dayFilter.disabled = true;
+            }
+        });
+
+        async function fetchAndDisplayReports() {
+            reportsLoading.classList.remove('hidden');
+            reportsContent.classList.add('hidden');
+            noReportsData.classList.add('hidden');
+
+            const year = yearFilter.value;
+            const month = monthFilter.value;
+            const day = dayFilter.value;
+
+            let startDate, endDate;
+            if (year !== 'all') {
+                const y = parseInt(year);
+                if (month !== 'all') {
+                    const m = parseInt(month);
+                    if (day !== 'all') { // Specific Day
+                        const d = parseInt(day);
+                        startDate = new Date(y, m, d, 0, 0, 0);
+                        endDate = new Date(y, m, d, 23, 59, 59);
+                    } else { // Specific Month
+                        startDate = new Date(y, m, 1);
+                        endDate = new Date(y, m + 1, 0, 23, 59, 59);
+                    }
+                } else { // Specific Year
+                    startDate = new Date(y, 0, 1);
+                    endDate = new Date(y, 11, 31, 23, 59, 59);
+                }
+            }
+            
+            let q = (startDate && endDate)
+                ? query(salesCollectionRef, where("timestamp", ">=", Timestamp.fromDate(startDate)), where("timestamp", "<=", Timestamp.fromDate(endDate)))
+                : query(salesCollectionRef);
+
+            try {
+                const querySnapshot = await getDocs(q);
+                const sales = querySnapshot.docs.map(doc => doc.data());
+                processAndRenderReports(sales);
+            } catch (error) {
+                console.error("Error fetching reports: ", error);
+                showAlert("حدث خطأ أثناء جلب التقارير.");
+                reportsLoading.classList.add('hidden');
+            }
+        }
+
+        function processAndRenderReports(sales) {
+            reportsLoading.classList.add('hidden');
+            if (sales.length === 0) {
+                noReportsData.classList.remove('hidden');
+                return;
+            }
+            reportsContent.classList.remove('hidden');
+            
+            let totalRevenue = 0;
+            let totalItems = 0;
+            const productCounts = {};
+            
+            sales.forEach(sale => {
+                totalRevenue += sale.total;
+                sale.items.forEach(item => {
+                    totalItems += item.quantity;
+                    productCounts[item.name] = (productCounts[item.name] || 0) + item.quantity;
+                });
+            });
+
+            totalRevenueEl.textContent = `${totalRevenue.toFixed(2)} جنيه`;
+            totalSalesCountEl.textContent = sales.length;
+            totalItemsSoldEl.textContent = totalItems;
+
+            const sortedTopProducts = Object.entries(productCounts).sort(([,a],[,b]) => b-a).slice(0, 10);
+            topSellingProductsEl.innerHTML = sortedTopProducts.map(([name, count]) => `
+                <div class="flex justify-between items-center">
+                    <span class="font-semibold">${name}</span>
+                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">${count} قطعة</span>
+                </div>
+            `).join('') || `<p class="text-gray-500">لا توجد بيانات.</p>`;
+
+            salesLogEl.innerHTML = sales.sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis()).map(sale => `
+                <div class="p-3 border-b">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold">${sale.timestamp.toDate().toLocaleString('ar-EG')}</span>
+                        <span class="font-bold text-green-600">${sale.total.toFixed(2)} جنيه</span>
+                    </div>
+                    <div class="text-sm text-gray-600 pl-4">
+                        ${sale.items.map(item => `<span>${item.name} (×${item.quantity})</span>`).join(', ')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- Event Listeners ---
+        posViewBtn.addEventListener('click', () => switchView('pos'));
+        reportsViewBtn.addEventListener('click', () => switchView('reports'));
+        fetchReportsBtn.addEventListener('click', fetchAndDisplayReports);
+        productsGrid.addEventListener('click', (e) => { if (e.target.matches('.add-to-cart-btn')) addToCart(e.target.dataset.productId); });
+        cartItemsContainer.addEventListener('click', (e) => { if (e.target.matches('.change-quantity-btn')) changeQuantity(e.target.dataset.id, e.target.dataset.action); });
+        searchInput.addEventListener('input', (e) => renderProducts(products.filter(p => p.name.toLowerCase().includes(e.target.value.toLowerCase()) || (p.barcode && p.barcode.includes(e.target.value)))));
+        checkoutBtn.addEventListener('click', handleCheckout);
+        addProductBtn.addEventListener('click', () => addProductModal.classList.remove('hidden'));
+        cancelAddProductBtn.addEventListener('click', () => addProductModal.classList.add('hidden'));
+        addProductForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newProduct = { name: productName.value, price: parseFloat(productPrice.value), stock: parseInt(productStock.value), barcode: productBarcode.value };
+            try {
+                await addDoc(productsCollectionRef, newProduct);
+                showAlert('تمت إضافة المنتج بنجاح!');
+                addProductForm.reset();
+                addProductModal.classList.add('hidden');
+            } catch (error) { showAlert('فشل في إضافة المنتج.'); }
+        });
+        document.getElementById('closeReceiptBtn').addEventListener('click', () => receiptModal.classList.add('hidden'));
+        document.getElementById('printReceiptBtn').addEventListener('click', () => {
+            const content = document.getElementById('receiptContent').innerHTML;
+            const win = window.open('', '', 'height=500,width=500');
+            win.document.write(`<html dir="rtl"><head><title>إيصال</title><link href="https://fonts.googleapis.com/css2?family=Cairo&display=swap" rel="stylesheet"><style>body{font-family:"Cairo",sans-serif;text-align:right;}.flex{display:flex}.justify-between{justify-content:space-between}.text-center{text-align:center}hr{border:0;border-top:1px dashed #ccc}</style></head><body>${content}</body></html>`);
+            win.document.close(); win.focus(); win.print(); win.close();
+        });
+
+        // --- Initial Calls ---
+        loadStateFromLocalStorage();
+        initializeAuth();
+        updateCartDisplay();
+        switchView(activeView); 
+    </script>
+</body>
+</html>
