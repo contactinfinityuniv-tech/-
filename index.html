@@ -153,7 +153,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        const appId = firebaseConfig.projectId || 'default-pos-app';
 
         // --- DOM Elements ---
         const posView = document.getElementById('posView');
@@ -192,19 +191,28 @@
 
         // --- App State ---
         let products = [];
-        let cart = {};
-        let activeView = 'pos';
+        let appState = {};
         let productsCollectionRef;
         let salesCollectionRef;
 
-        // --- Local Storage Persistence ---
-        const CART_STORAGE_KEY = 'hypermarketCart';
-        const VIEW_STORAGE_KEY = 'hypermarketActiveView';
+        // --- Local Storage Persistence & State Management ---
+        const APP_STATE_KEY = 'hypermarketAppState';
 
+        function resetState() {
+             appState = {
+                cart: {},
+                activeView: 'pos',
+                reportFilters: {
+                    year: 'all',
+                    month: 'all',
+                    day: 'all',
+                }
+            };
+        }
+        
         function saveStateToLocalStorage() {
             try {
-                localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
-                localStorage.setItem(VIEW_STORAGE_KEY, activeView);
+                localStorage.setItem(APP_STATE_KEY, JSON.stringify(appState));
             } catch (e) {
                 console.error("Failed to save state to localStorage", e);
             }
@@ -212,24 +220,31 @@
 
         function loadStateFromLocalStorage() {
             try {
-                const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-                const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
-                if (savedCart) {
-                    cart = JSON.parse(savedCart);
-                }
-                if (savedView) {
-                    activeView = savedView;
+                const savedState = localStorage.getItem(APP_STATE_KEY);
+                if (savedState) {
+                    appState = JSON.parse(savedState);
+                } else {
+                    resetState();
                 }
             } catch (e) {
                 console.error("Failed to load state from localStorage", e);
-                cart = {}; // Reset on error
-                activeView = 'pos';
+                resetState();
             }
+        }
+        
+        // --- Performance Utilities ---
+        // Debounce function to limit how often a function gets called.
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
+            };
         }
 
         // --- App Initialization ---
         function switchView(viewToShow) {
-            activeView = viewToShow;
+            appState.activeView = viewToShow;
             posView.classList.add('hidden-view');
             reportsView.classList.add('hidden-view');
             
@@ -248,7 +263,7 @@
                 reportsViewBtn.classList.replace('text-gray-700', 'text-white');
                 initializeDateFilters();
             }
-            saveStateToLocalStorage(); // Save view change
+            saveStateToLocalStorage();
         }
 
         // --- Custom Alert ---
@@ -271,7 +286,6 @@
         onAuthStateChanged(auth, user => {
             if (user) {
                 console.log("User is signed in:", user.uid);
-                // The collection path is now generic and doesn't rely on the __app_id variable.
                 productsCollectionRef = collection(db, "products");
                 salesCollectionRef = collection(db, "sales");
                 loadProducts();
@@ -292,92 +306,101 @@
 
         function renderProducts(productsToRender) {
             productsGrid.innerHTML = '';
+            // Use DocumentFragment for performance boost on large lists
+            const fragment = document.createDocumentFragment();
             if (productsToRender.length === 0) {
                 productsGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">لم يتم العثور على منتجات.</p>`;
                 return;
             }
             productsToRender.forEach(product => {
                 const isOutOfStock = product.stock <= 0;
-                const card = `
-                    <div class="bg-white rounded-lg shadow p-4 flex flex-col justify-between ${isOutOfStock ? 'opacity-50' : ''}">
-                        <div>
-                            <h3 class="font-bold text-lg truncate">${product.name}</h3>
-                            <p class="text-gray-600">${product.price.toFixed(2)} جنيه</p>
-                            <p class="text-sm ${product.stock < 10 && product.stock > 0 ? 'text-red-500 font-semibold' : 'text-gray-500'}">
-                                ${isOutOfStock ? 'نفدت الكمية' : `المخزون: ${product.stock}`}
-                            </p>
-                        </div>
-                        <button data-product-id="${product.id}" class="add-to-cart-btn mt-3 w-full ${isOutOfStock ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'} text-white px-3 py-1.5 rounded-md transition-colors" ${isOutOfStock ? 'disabled' : ''}>إضافة للسلة</button>
-                    </div>`;
-                productsGrid.innerHTML += card;
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `bg-white rounded-lg shadow p-4 flex flex-col justify-between ${isOutOfStock ? 'opacity-50' : ''}`;
+                cardDiv.innerHTML = `
+                    <div>
+                        <h3 class="font-bold text-lg truncate">${product.name}</h3>
+                        <p class="text-gray-600">${product.price.toFixed(2)} جنيه</p>
+                        <p class="text-sm ${product.stock < 10 && product.stock > 0 ? 'text-red-500 font-semibold' : 'text-gray-500'}">
+                            ${isOutOfStock ? 'نفدت الكمية' : `المخزون: ${product.stock}`}
+                        </p>
+                    </div>
+                    <button data-product-id="${product.id}" class="add-to-cart-btn mt-3 w-full ${isOutOfStock ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'} text-white px-3 py-1.5 rounded-md transition-colors" ${isOutOfStock ? 'disabled' : ''}>إضافة للسلة</button>
+                `;
+                fragment.appendChild(cardDiv);
             });
+            productsGrid.appendChild(fragment);
         }
 
         function addToCart(productId) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
-            const cartQuantity = cart[productId] ? cart[productId].quantity : 0;
+            const cartQuantity = appState.cart[productId] ? appState.cart[productId].quantity : 0;
             if (cartQuantity >= product.stock) {
                 showAlert('الكمية في السلة تساوي المخزون المتاح.');
                 return;
             }
-            if (cart[productId]) cart[productId].quantity++;
-            else cart[productId] = { name: product.name, price: product.price, quantity: 1, stock: product.stock };
+            if (appState.cart[productId]) appState.cart[productId].quantity++;
+            else appState.cart[productId] = { name: product.name, price: product.price, quantity: 1, stock: product.stock };
             updateCartDisplay();
         }
 
         function updateCartDisplay() {
             cartItemsContainer.innerHTML = '';
             let subtotal = 0;
-            const productIds = Object.keys(cart);
+            const productIds = Object.keys(appState.cart);
             emptyCartMessage.classList.toggle('hidden', productIds.length > 0);
             checkoutBtn.disabled = productIds.length === 0;
 
+            const fragment = document.createDocumentFragment();
             productIds.forEach(id => {
-                const item = cart[id];
+                const item = appState.cart[id];
                 subtotal += item.price * item.quantity;
-                cartItemsContainer.innerHTML += `
-                    <div class="flex justify-between items-center p-2 rounded-lg hover:bg-gray-100">
-                        <div><p class="font-semibold">${item.name}</p><p class="text-sm text-gray-500">${item.price.toFixed(2)} جنيه</p></div>
-                        <div class="flex items-center space-x-3 space-x-reverse">
-                            <button data-id="${id}" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">-</button>
-                            <span>${item.quantity}</span>
-                            <button data-id="${id}" data-action="increase" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">+</button>
-                        </div>
-                        <span class="font-semibold w-20 text-left">${(item.price * item.quantity).toFixed(2)}</span>
-                    </div>`;
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center p-2 rounded-lg hover:bg-gray-100';
+                itemDiv.innerHTML = `
+                    <div><p class="font-semibold">${item.name}</p><p class="text-sm text-gray-500">${item.price.toFixed(2)} جنيه</p></div>
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <button data-id="${id}" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">-</button>
+                        <span>${item.quantity}</span>
+                        <button data-id="${id}" data-action="increase" class="change-quantity-btn bg-gray-200 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-300">+</button>
+                    </div>
+                    <span class="font-semibold w-20 text-left">${(item.price * item.quantity).toFixed(2)}</span>
+                `;
+                fragment.appendChild(itemDiv);
             });
+            cartItemsContainer.appendChild(fragment);
+
             const tax = subtotal * 0.14;
             const total = subtotal + tax;
             subtotalEl.textContent = `${subtotal.toFixed(2)} جنيه`;
             taxEl.textContent = `${tax.toFixed(2)} جنيه`;
             totalEl.textContent = `${total.toFixed(2)} جنيه`;
-            saveStateToLocalStorage(); // Save cart changes
+            saveStateToLocalStorage();
         }
         
         function changeQuantity(productId, action) {
-            if (!cart[productId]) return;
+            if (!appState.cart[productId]) return;
             if (action === 'increase') {
                  const product = products.find(p => p.id === productId);
-                 if (cart[productId].quantity < product.stock) cart[productId].quantity++;
+                 if (appState.cart[productId].quantity < product.stock) appState.cart[productId].quantity++;
                  else showAlert('الكمية في السلة تساوي المخزون المتاح.');
             } else {
-                cart[productId].quantity--;
-                if (cart[productId].quantity === 0) delete cart[productId];
+                appState.cart[productId].quantity--;
+                if (appState.cart[productId].quantity === 0) delete appState.cart[productId];
             }
             updateCartDisplay();
         }
 
         async function handleCheckout() {
-            if (Object.keys(cart).length === 0) return;
+            if (Object.keys(appState.cart).length === 0) return;
             checkoutBtn.disabled = true;
             checkoutBtn.textContent = 'جاري المعالجة...';
             try {
                 const batch = writeBatch(db);
                 let subtotal = 0;
                 const saleItems = [];
-                for (const productId in cart) {
-                    const item = cart[productId];
+                for (const productId in appState.cart) {
+                    const item = appState.cart[productId];
                     const productRef = doc(productsCollectionRef, productId);
                     const newStock = item.stock - item.quantity;
                     if (newStock < 0) throw new Error(`الكمية غير كافية للمنتج: ${item.name}`);
@@ -395,7 +418,7 @@
                 batch.set(doc(salesCollectionRef), saleDoc);
                 await batch.commit();
                 showReceipt(saleDoc);
-                cart = {};
+                appState.cart = {};
                 updateCartDisplay();
             } catch (error) {
                 console.error("Checkout failed:", error);
@@ -428,10 +451,15 @@
                 monthFilter.innerHTML += `<option value="${i}">${m}</option>`;
             });
             dayFilter.innerHTML = `<option value="all">كل الأيام</option>`;
-            dayFilter.disabled = true;
+            
+            // Restore filters from saved state
+            yearFilter.value = appState.reportFilters.year;
+            monthFilter.value = appState.reportFilters.month;
+            updateDayFilter();
+            dayFilter.value = appState.reportFilters.day;
         }
 
-        monthFilter.addEventListener('change', () => {
+        function updateDayFilter() {
             const year = parseInt(yearFilter.value);
             const month = parseInt(monthFilter.value);
             dayFilter.innerHTML = `<option value="all">كل الأيام</option>`;
@@ -444,31 +472,38 @@
             } else {
                 dayFilter.disabled = true;
             }
-        });
+        }
+
+        function saveFilterState() {
+            appState.reportFilters = {
+                year: yearFilter.value,
+                month: monthFilter.value,
+                day: dayFilter.value
+            };
+            saveStateToLocalStorage();
+        }
 
         async function fetchAndDisplayReports() {
             reportsLoading.classList.remove('hidden');
             reportsContent.classList.add('hidden');
             noReportsData.classList.add('hidden');
 
-            const year = yearFilter.value;
-            const month = monthFilter.value;
-            const day = dayFilter.value;
+            const { year, month, day } = appState.reportFilters;
 
             let startDate, endDate;
             if (year !== 'all') {
                 const y = parseInt(year);
                 if (month !== 'all') {
                     const m = parseInt(month);
-                    if (day !== 'all') { // Specific Day
+                    if (day !== 'all') {
                         const d = parseInt(day);
                         startDate = new Date(y, m, d, 0, 0, 0);
                         endDate = new Date(y, m, d, 23, 59, 59);
-                    } else { // Specific Month
+                    } else {
                         startDate = new Date(y, m, 1);
                         endDate = new Date(y, m + 1, 0, 23, 59, 59);
                     }
-                } else { // Specific Year
+                } else {
                     startDate = new Date(y, 0, 1);
                     endDate = new Date(y, 11, 31, 23, 59, 59);
                 }
@@ -480,7 +515,7 @@
 
             try {
                 const querySnapshot = await getDocs(q);
-                const sales = querySnapshot.docs.map(doc => doc.data());
+                const sales = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
                 processAndRenderReports(sales);
             } catch (error) {
                 console.error("Error fetching reports: ", error);
@@ -514,33 +549,61 @@
             totalItemsSoldEl.textContent = totalItems;
 
             const sortedTopProducts = Object.entries(productCounts).sort(([,a],[,b]) => b-a).slice(0, 10);
-            topSellingProductsEl.innerHTML = sortedTopProducts.map(([name, count]) => `
-                <div class="flex justify-between items-center">
-                    <span class="font-semibold">${name}</span>
-                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">${count} قطعة</span>
-                </div>
-            `).join('') || `<p class="text-gray-500">لا توجد بيانات.</p>`;
+            const topProductsFragment = document.createDocumentFragment();
+            sortedTopProducts.forEach(([name, count]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center';
+                div.innerHTML = `<span class="font-semibold">${name}</span><span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">${count} قطعة</span>`;
+                topProductsFragment.appendChild(div);
+            });
+            topSellingProductsEl.innerHTML = '';
+            topSellingProductsEl.appendChild(topProductsFragment);
+            if (sortedTopProducts.length === 0) topSellingProductsEl.innerHTML = `<p class="text-gray-500">لا توجد بيانات.</p>`;
 
-            salesLogEl.innerHTML = sales.sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis()).map(sale => `
-                <div class="p-3 border-b">
+            const salesLogFragment = document.createDocumentFragment();
+            sales.sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis()).forEach(sale => {
+                const div = document.createElement('div');
+                div.className = 'p-3 border-b';
+                div.innerHTML = `
                     <div class="flex justify-between items-center mb-1">
                         <span class="font-bold">${sale.timestamp.toDate().toLocaleString('ar-EG')}</span>
                         <span class="font-bold text-green-600">${sale.total.toFixed(2)} جنيه</span>
                     </div>
                     <div class="text-sm text-gray-600 pl-4">
                         ${sale.items.map(item => `<span>${item.name} (×${item.quantity})</span>`).join(', ')}
-                    </div>
-                </div>
-            `).join('');
+                    </div>`;
+                salesLogFragment.appendChild(div);
+            });
+            salesLogEl.innerHTML = '';
+            salesLogEl.appendChild(salesLogFragment);
         }
 
         // --- Event Listeners ---
         posViewBtn.addEventListener('click', () => switchView('pos'));
         reportsViewBtn.addEventListener('click', () => switchView('reports'));
+        
+        [yearFilter, monthFilter, dayFilter].forEach(el => {
+            el.addEventListener('change', () => {
+                if (el !== dayFilter) updateDayFilter();
+                saveFilterState();
+            });
+        });
+
         fetchReportsBtn.addEventListener('click', fetchAndDisplayReports);
-        productsGrid.addEventListener('click', (e) => { if (e.target.matches('.add-to-cart-btn')) addToCart(e.target.dataset.productId); });
-        cartItemsContainer.addEventListener('click', (e) => { if (e.target.matches('.change-quantity-btn')) changeQuantity(e.target.dataset.id, e.target.dataset.action); });
-        searchInput.addEventListener('input', (e) => renderProducts(products.filter(p => p.name.toLowerCase().includes(e.target.value.toLowerCase()) || (p.barcode && p.barcode.includes(e.target.value)))));
+        productsGrid.addEventListener('click', (e) => { if (e.target.closest('.add-to-cart-btn')) addToCart(e.target.closest('.add-to-cart-btn').dataset.productId); });
+        cartItemsContainer.addEventListener('click', (e) => { if (e.target.closest('.change-quantity-btn')) changeQuantity(e.target.closest('.change-quantity-btn').dataset.id, e.target.closest('.change-quantity-btn').dataset.action); });
+        
+        // Debounced search handler
+        const handleSearch = debounce((event) => {
+            const searchTerm = event.target.value.toLowerCase();
+            const filteredProducts = products.filter(p => 
+                p.name.toLowerCase().includes(searchTerm) || 
+                (p.barcode && p.barcode.includes(searchTerm))
+            );
+            renderProducts(filteredProducts);
+        }, 300);
+        searchInput.addEventListener('input', handleSearch);
+
         checkoutBtn.addEventListener('click', handleCheckout);
         addProductBtn.addEventListener('click', () => addProductModal.classList.remove('hidden'));
         cancelAddProductBtn.addEventListener('click', () => addProductModal.classList.add('hidden'));
@@ -566,7 +629,7 @@
         loadStateFromLocalStorage();
         initializeAuth();
         updateCartDisplay();
-        switchView(activeView); 
+        switchView(appState.activeView); 
     </script>
 </body>
 </html>
