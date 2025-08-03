@@ -136,16 +136,24 @@
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, writeBatch, query, where, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // --- Firebase Configuration ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pos-app';
+        const firebaseConfig = {
+            apiKey: "AIzaSyBBl0l_jyowt10h0mYNS9BnFCut-HVbmwY",
+            authDomain: "cash-dd785.firebaseapp.com",
+            projectId: "cash-dd785",
+            storageBucket: "cash-dd785.appspot.com",
+            messagingSenderId: "150146604735",
+            appId: "1:150146604735:web:3a6480ddab01960dd4f00a",
+            measurementId: "G-MK66K2JFH1"
+        };
         
         // --- Initialize Firebase ---
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        const appId = firebaseConfig.projectId || 'default-pos-app';
 
         // --- DOM Elements ---
         const posView = document.getElementById('posView');
@@ -253,20 +261,19 @@
         // --- Authentication ---
         async function initializeAuth() {
             try {
-                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (token) await signInWithCustomToken(auth, token);
-                else await signInAnonymously(auth);
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Authentication failed:", error);
-                showAlert("فشل المصادقة. لا يمكن تحميل البيانات.");
+                showAlert("فشل المصادقة. تأكد من صحة إعدادات Firebase وتفعيل تسجيل الدخول المجهول في مشروعك.");
             }
         }
 
         onAuthStateChanged(auth, user => {
             if (user) {
                 console.log("User is signed in:", user.uid);
-                productsCollectionRef = collection(db, `artifacts/${appId}/public/data/products`);
-                salesCollectionRef = collection(db, `artifacts/${appId}/public/data/sales`);
+                // The collection path is now generic and doesn't rely on the __app_id variable.
+                productsCollectionRef = collection(db, "products");
+                salesCollectionRef = collection(db, "sales");
                 loadProducts();
             } else {
                 console.log("User is signed out.");
